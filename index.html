@@ -170,6 +170,7 @@
 
   /* LAYOUT */
   .main-grid{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start;}
+  .main-grid>.panel{min-width:0;}
   @media(max-width:960px){.main-grid{grid-template-columns:1fr;}}
   .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:18px;transition:background-color .2s,border-color .2s;}
 
