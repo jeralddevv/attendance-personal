@@ -393,6 +393,7 @@ var ICONS={
   menu:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>',
   logout:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
   chevron_left:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5l-6.5 7 6.5 7"/></svg>',
+  chevron_down:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
   shield:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 4.4-3.4 8.5-8 9.5C7.4 20.5 4 16.4 4 12V7l8-4z"/></svg>',
   activity:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
   sync:'<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>'
@@ -417,6 +418,7 @@ var state={
   users:{},
   employees:[],activeEmployeeId:'',logs:{},holidays:[],activityLog:[],
   theme:'light',page:'dashboard',tab:'calendar',
+  cutoffCollapsed:{first:false,second:false},
   viewMonth:som(new Date()),modal:null,
   editingEmployeeId:null,newOffDays:[0],sidebarOpen:false,sidebarCollapsed:false,
   adminYear:new Date().getFullYear(),newHolidayType:'special',
@@ -904,7 +906,7 @@ function statsRowHtml(emp){
     '<div class="stat-card" style="color:var(--green);"><div><p class="stat-label">Present</p><p class="stat-value">'+r.present+'</p></div><div class="icon-badge tint-green">'+ICONS.calendar+'</div></div>'+
     '<div class="stat-card" style="color:var(--purple);"><div><p class="stat-label">OB</p><p class="stat-value">'+r.ob+'</p></div><div class="icon-badge tint-purple">'+ICONS.calendar+'</div></div>'+
     '<div class="stat-card" style="color:var(--primary);"><div><p class="stat-label">OT Hours</p><p class="stat-value">'+r.ot.toFixed(1)+'h</p></div><div class="icon-badge tint-primary">'+ICONS.clock+'</div></div>'+
-    '<div class="stat-card" style="color:var(--amber);"><div><p class="stat-label">Late (mins)</p><p class="stat-value">'+r.late+'</p></div><div class="icon-badge tint-amber">'+ICONS.alert+'</div></div>'+
+    '<div class="stat-card" style="color:var(--amber);"><div><p class="stat-label">Late (mins / hrs)</p><p class="stat-value">'+r.late+'<span style="font-size:12px;font-weight:600;color:var(--ink-soft);"> / '+(r.late/60).toFixed(1)+'h</span></p></div><div class="icon-badge tint-amber">'+ICONS.alert+'</div></div>'+
     '</div>';
 }
 function monthNavHtml(){
@@ -945,6 +947,14 @@ function renderCalTab(){
     if(inMonth){
       var dotKinds=[];
       html+='<div class="cal-tags">';
+      if(holiday){
+        html+='<span class="cal-tag holiday '+(holiday.type||'custom')+'" title="'+esc(holiday.label)+'">'+esc(holiday.label)+'</span>';
+        dotKinds.push('holiday');
+      }
+      if(isOff&&!log){
+        html+='<span class="cal-tag off">Day off</span>';
+        dotKinds.push('off');
+      }
       if(log){
         getLogStatuses(log).forEach(function(key){
           var data=getStatusData(log,key);
@@ -976,16 +986,12 @@ function renderCalTab(){
             dotKinds.push('changetime');
           }
         });
-      } else if(holiday){
-        html+='<span class="cal-tag holiday '+(holiday.type||'custom')+'" title="'+esc(holiday.label)+'">'+esc(holiday.label)+'</span>';
-        dotKinds.push('holiday');
-      } else if(isOff){
-        html+='<span class="cal-tag off">Day off</span>';
-        dotKinds.push('off');
       }
       html+='</div>';
       if(dotKinds.length){
-        html+='<div class="cal-dots">'+dotKinds.map(function(k){return '<span class="cal-dot '+k+'"></span>';}).join('')+'</div>';
+        html+='<div class="cal-dots">';
+        dotKinds.forEach(function(k){html+='<span class="cal-dot '+k+'"></span>';});
+        html+='</div>';
       }
     }
     html+='</div>';
@@ -1035,7 +1041,7 @@ function dayRowHtml(emp,ds){
     });
     if(badges.length){
       statusCell=badges.join(' ');
-      hoursCell=hoursSum.toFixed(1);otCell=otSum.toFixed(1);lateCell=String(lateSum);
+      hoursCell=hoursSum.toFixed(1);otCell=otSum.toFixed(1);lateCell=lateSum>0?lateSum+'m / '+(lateSum/60).toFixed(1)+'h':'0';
       remarksCell=esc(remarksParts.join('; '));
     }
   } else if(holiday){
@@ -1049,27 +1055,34 @@ function dayRowHtml(emp,ds){
     '<td class="num">'+hoursCell+'</td><td class="num">'+otCell+'</td><td class="num">'+lateCell+'</td>'+
     '<td>'+remarksCell+'</td></tr>';
 }
-function cutoffSectionHtml(emp,year,month,startDay,endDay,title,subtitle){
+function cutoffSectionHtml(emp,year,month,startDay,endDay,title,subtitle,sectionKey){
   var rows='';
   for(var dd=startDay;dd<=endDay;dd++){rows+=dayRowHtml(emp,isoDate(new Date(year,month,dd)));}
   var r=computeRange(emp,new Date(year,month,startDay),new Date(year,month,endDay));
   var totalsRow='<tr class="totals-row"><td colspan="2">Total</td><td>'+r.present+' pres · '+r.ob+' OB · '+r.absent+' abs</td>'+
-    '<td></td><td></td><td class="num">'+r.hours.toFixed(1)+'</td><td class="num">'+r.ot.toFixed(1)+'</td><td class="num">'+r.late+'</td><td></td></tr>';
+    '<td></td><td></td><td class="num">'+r.hours.toFixed(1)+'</td><td class="num">'+r.ot.toFixed(1)+'</td><td class="num">'+r.late+'m / '+(r.late/60).toFixed(1)+'h</td><td></td></tr>';
+  var collapsed=!!state.cutoffCollapsed[sectionKey];
   return '<div class="cutoff-section">'+
-    '<div class="cutoff-section-head"><h3>'+title+'</h3><span class="cutoff-range">'+subtitle+'</span></div>'+
+    '<div class="cutoff-section-head">'+
+    '<h3 style="margin:0;">'+title+'</h3>'+
+    '<span class="cutoff-range">'+subtitle+'</span>'+
+    '<button type="button" data-cutoff-toggle="'+sectionKey+'" style="display:flex;align-items:center;background:transparent;border:none;cursor:pointer;padding:2px;margin-left:auto;color:var(--ink-soft);">'+
+    '<span style="display:inline-flex;transition:transform .18s;transform:rotate('+(collapsed?'-90deg':'0deg')+');">'+ICONS.chevron_down+'</span>'+
+    '</button></div>'+
+    '<div id="cutoffBody_'+sectionKey+'" style="'+(collapsed?'display:none;':'')+'">'+
     '<div class="scroll-hint">← Scroll sideways →</div>'+
     '<div class="table-wrap"><table class="cutoff-table"><thead><tr>'+
     '<th class="num">#</th><th>Day</th><th>Status</th><th class="num">In</th><th class="num">Out</th>'+
-    '<th class="num">Hrs</th><th class="num">OT(h)</th><th class="num">Late(m)</th><th>Notes</th>'+
-    '</tr></thead><tbody>'+rows+totalsRow+'</tbody></table></div></div>';
+    '<th class="num">Hrs</th><th class="num">OT(h)</th><th class="num">Late (m/h)</th><th>Notes</th>'+
+    '</tr></thead><tbody>'+rows+totalsRow+'</tbody></table></div></div></div>';
 }
 function renderCutoffTab(){
   var emp=activeEmp();
   if(!emp)return renderEmpty();
   var y=state.viewMonth.getFullYear(),mo=state.viewMonth.getMonth(),last=dim(state.viewMonth);
   var html=monthNavHtml();
-  html+=cutoffSectionHtml(emp,y,mo,1,15,'1st Cutoff','1 – 15');
-  html+=cutoffSectionHtml(emp,y,mo,16,last,'2nd Cutoff','16 – '+last);
+  html+=cutoffSectionHtml(emp,y,mo,1,15,'1st Cutoff','1 – 15','first');
+  html+=cutoffSectionHtml(emp,y,mo,16,last,'2nd Cutoff','16 – '+last,'second');
   var r1=computeRange(emp,new Date(y,mo,1),new Date(y,mo,15));
   var r2=computeRange(emp,new Date(y,mo,16),new Date(y,mo,last));
   var tot={present:r1.present+r2.present,absent:r1.absent+r2.absent,ob:r1.ob+r2.ob,
@@ -1080,7 +1093,7 @@ function renderCutoffTab(){
     '<span><b>'+tot.ob+'</b> OB</span>'+
     '<span><b>'+tot.hours.toFixed(1)+'h</b> worked</span>'+
     '<span><b>'+tot.ot.toFixed(1)+'h</b> OT</span>'+
-    '<span><b>'+tot.late+'m</b> late</span></div></div>';
+    '<span><b>'+tot.late+'m / '+(tot.late/60).toFixed(1)+'h</b> late</span></div></div>';
   html+='<div class="cutoff-toolbar"><button type="button" class="btn btn-ghost" id="exportBtn">'+ICONS.download+'<span>Export CSV</span></button></div>';
   return html;
 }
@@ -1468,10 +1481,18 @@ function attachDashboardPage(){
   if(eb)eb.onclick=function(){state.page='employees';render();};
   var ex=document.getElementById('exportBtn');
   if(ex)ex.onclick=exportCsv;
+  document.querySelectorAll('[data-cutoff-toggle]').forEach(function(b){
+    b.onclick=function(){
+      var key=b.getAttribute('data-cutoff-toggle');
+      state.cutoffCollapsed[key]=!state.cutoffCollapsed[key];
+      render();
+    };
+  });
   document.querySelectorAll('.cal-cell[data-day]').forEach(function(c){
     c.onclick=function(){state.modal={type:'day',date:c.getAttribute('data-day'),mode:'view'};render();};
   });
 }
+
 function attachActivityLogPage(){
   var filter=document.getElementById('actEmpFilter');
   if(filter)filter.onchange=function(){
@@ -1895,14 +1916,11 @@ function attachDayEditModal(){
 }
 
 /* ══════════════════════════════════════ RESIZE ══════════════════════════════════════ */
-var resizeTimer,lastWinWidth=window.innerWidth;
+var resizeTimer;
 window.addEventListener('resize',function(){
   clearTimeout(resizeTimer);
   resizeTimer=setTimeout(function(){
-    var w=window.innerWidth;
-    if(w===lastWinWidth)return; // height-only change (e.g. mobile keyboard open/close) — ignore, don't re-render
-    lastWinWidth=w;
-    if(w>900)state.sidebarOpen=false;
+    if(window.innerWidth>900)state.sidebarOpen=false;
     render();
   },120);
 });
