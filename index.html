@@ -1401,9 +1401,13 @@ function render(){
   else pc.innerHTML=renderDashboardPage();
   var root=document.getElementById('modalRoot');
   if(!state.modal){root.innerHTML='';}
-  else if(state.modal.type==='day'){root.innerHTML=renderDayModal(state.modal.date);}
+  else if(state.modal.type==='day'&&state.modal.mode==='edit'){root.innerHTML=renderDayEditModal(state.modal.date);}
+  else if(state.modal.type==='day'){root.innerHTML=renderDayViewModal(state.modal.date);}
   attachMain();attachPage();
-  if(state.modal)attachModal();
+  if(state.modal&&state.modal.type==='day'){
+    if(state.modal.mode==='edit')attachDayEditModal();
+    else attachDayViewModal();
+  }
 }
 
 /* ══════════════════════════════════════ ATTACH: GLOBAL ══════════════════════════════════════ */
@@ -1465,7 +1469,7 @@ function attachDashboardPage(){
   var ex=document.getElementById('exportBtn');
   if(ex)ex.onclick=exportCsv;
   document.querySelectorAll('.cal-cell[data-day]').forEach(function(c){
-    c.onclick=function(){state.modal={type:'day',date:c.getAttribute('data-day')};render();};
+    c.onclick=function(){state.modal={type:'day',date:c.getAttribute('data-day'),mode:'view'};render();};
   });
 }
 function attachActivityLogPage(){
@@ -1610,7 +1614,80 @@ function attachAdminPage(){
 }
 
 /* ══════════════════════════════════════ DAY MODAL ══════════════════════════════════════ */
-function renderDayModal(ds){
+/* ══════════════════════════════════════ DAY MODAL ══════════════════════════════════════ */
+function dayStatusDetailHtml(emp,log,key){
+  var data=getStatusData(log,key);
+  var html='';
+  if(key==='present'){
+    var m=metricsFor(emp,log,'present');
+    html+='<div class="log-times">'+(data.in?fmtTime(data.in):'')+' – '+(data.out?fmtTime(data.out):'')+'</div>'+
+      '<div class="log-badges">'+(m.lateMins>0?'<span class="late-note">'+m.lateMins+'m late</span>':'')+
+      '<span class="badge present">Host Store</span>'+
+      (m.otHours>0?'<span class="badge ot">+'+m.otHours.toFixed(1)+'h OT</span>':'')+
+      '</div>';
+    if(data.remarks)html+='<div class="log-remarks">'+esc(data.remarks)+'</div>';
+  } else if(key==='absent'){
+    html+='<div class="log-badges"><span class="badge absent">Absent</span></div>';
+    if(data.remarks)html+='<div class="log-remarks">'+esc(data.remarks)+'</div>';
+  } else if(key==='leave'){
+    html+='<div class="log-badges"><span class="badge leave">Leave</span></div>';
+    if(data.remarks)html+='<div class="log-remarks">'+esc(data.remarks)+'</div>';
+  } else if(key==='ob'){
+    var mo=metricsFor(emp,log,'ob');
+    html+='<div class="log-times">'+(data.in?fmtTime(data.in):'')+' – '+(data.out?fmtTime(data.out):'')+'</div>'+
+      '<div class="log-badges"><span class="badge ob">Off. Business</span>'+
+      (mo.otHours>0?'<span class="badge ot">+'+mo.otHours.toFixed(1)+'h OT</span>':'')+
+      '</div>';
+    if(data.destination)html+='<div class="log-remarks">Destination: '+esc(data.destination)+'</div>';
+    if(data.remarks)html+='<div class="log-remarks">'+esc(data.remarks)+'</div>';
+  } else if(key==='changeday'){
+    html+='<div class="log-badges"><span class="badge changeday">Day-off Change</span></div>';
+    html+='<div class="log-remarks">'+esc(WD_FULL[data.originalDay]||'')+' → '+esc(WD_FULL[data.newDay]||'')+'</div>';
+    if(data.remarks)html+='<div class="log-remarks">'+esc(data.remarks)+'</div>';
+  } else if(key==='changetime'){
+    html+='<div class="log-badges"><span class="badge changetime">Schedule Change</span></div>';
+    html+='<div class="log-remarks">New: '+(data.newStart?fmtTime(data.newStart):'')+'–'+(data.newEnd?fmtTime(data.newEnd):'')+'</div>';
+    if(data.remarks)html+='<div class="log-remarks">'+esc(data.remarks)+'</div>';
+  }
+  return html;
+}
+
+function renderDayViewModal(ds){
+  var emp=activeEmp();
+  if(!emp)return '';
+  var d=parseIso(ds),log=getLog(emp.id,ds),holiday=holidayFor(ds);
+  var keys=getLogStatuses(log);
+  var isOff=isDayOffForDate(emp,d);
+  var html='<div class="modal-backdrop" id="dayBd"><div class="modal-panel">';
+  html+='<div class="modal-head"><h3>'+d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'})+'</h3>'+
+    '<button type="button" class="icon-btn" id="closeDayM">'+ICONS.x+'</button></div>';
+  if(holiday){
+    html+='<div style="margin-bottom:14px;"><span class="cal-tag holiday '+(holiday.type||'custom')+'">'+esc(holiday.label)+'</span></div>';
+  }
+  if(keys.length){
+    html+='<div>';
+    keys.forEach(function(key){html+='<div style="margin-bottom:14px;">'+dayStatusDetailHtml(emp,log,key)+'</div>';});
+    html+='</div>';
+  } else if(!holiday){
+    html+='<p class="empty-note" style="padding:20px 8px;">'+(isOff?'Scheduled day off.':'No attendance record for this day yet.')+'</p>';
+  }
+  html+='<div class="modal-footer">'+
+    '<button type="button" class="btn btn-ghost" id="closeDayViewBtn">Close</button>'+
+    '<button type="button" class="btn btn-primary" id="editDayBtn">'+ICONS.pencil+'<span>'+((keys.length||holiday)?'Edit':'Add record')+'</span></button></div>';
+  html+='</div></div>';
+  return html;
+}
+
+function attachDayViewModal(){
+  var bd=document.getElementById('dayBd');
+  function close(){state.modal=null;render();}
+  bd.addEventListener('click',function(e){if(e.target===bd)close();});
+  document.getElementById('closeDayM').onclick=close;
+  document.getElementById('closeDayViewBtn').onclick=close;
+  document.getElementById('editDayBtn').onclick=function(){state.modal.mode='edit';render();};
+}
+
+function renderDayEditModal(ds){
   var emp=activeEmp(),d=parseIso(ds),log=getLog(emp.id,ds)||{},holiday=holidayFor(ds);
   var status=log.status||'none';
   var ti=getStatusData(log,'present').in||emp.shiftStart,to=getStatusData(log,'present').out||emp.shiftEnd;
@@ -1706,8 +1783,7 @@ function renderDayModal(ds){
   return html;
 }
 
-function attachModal(){
-  if(state.modal.type!=='day')return;
+function attachDayEditModal(){
   var ds=state.modal.date,emp=activeEmp();
   var bd=document.getElementById('dayBd');
   var existingLog=getLog(emp.id,ds)||{};
