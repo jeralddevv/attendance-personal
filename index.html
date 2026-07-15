@@ -1895,11 +1895,14 @@ function attachDayEditModal(){
 }
 
 /* ══════════════════════════════════════ RESIZE ══════════════════════════════════════ */
-var resizeTimer;
+var resizeTimer,lastWinWidth=window.innerWidth;
 window.addEventListener('resize',function(){
   clearTimeout(resizeTimer);
   resizeTimer=setTimeout(function(){
-    if(window.innerWidth>900)state.sidebarOpen=false;
+    var w=window.innerWidth;
+    if(w===lastWinWidth)return; // height-only change (e.g. mobile keyboard open/close) — ignore, don't re-render
+    lastWinWidth=w;
+    if(w>900)state.sidebarOpen=false;
     render();
   },120);
 });
